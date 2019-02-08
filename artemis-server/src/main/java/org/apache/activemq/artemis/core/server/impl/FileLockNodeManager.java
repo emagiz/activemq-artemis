@@ -20,6 +20,9 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileLock;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
 import org.apache.activemq.artemis.api.core.ActiveMQIllegalStateException;
 import org.apache.activemq.artemis.api.core.SimpleString;
@@ -48,8 +51,10 @@ public class FileLockNodeManager extends NodeManager {
    private static final byte PAUSED = 'P';
 
    private static final byte NOT_STARTED = 'N';
+   
+   private static final int LOCK_MONITOR_TIMEOUT_MILLIES = 2000;
 
-   private FileLock liveLock;
+   private volatile FileLock liveLock;
 
    private FileLock backupLock;
 
@@ -168,6 +173,8 @@ public class FileLockNodeManager extends NodeManager {
       liveLock = lock(FileLockNodeManager.LIVE_LOCK_POS);
 
       ActiveMQServerLogger.LOGGER.obtainedLiveLock();
+
+      startLockMonitoring();
 
       return new ActivateCallback() {
          @Override
@@ -337,6 +344,105 @@ public class FileLockNodeManager extends NodeManager {
       }
       while (lock == null);
       return lock;
+   }
+   
+   private void startLockMonitoring()	{
+	   logger.debug("Starting the lock monitor");
+	   Thread monitorThread = new Thread(new MonitorLock());
+//	   Don't want the exit to block because of the below thread
+	   monitorThread.setDaemon(true);
+	   monitorThread.start();
+   }
+   
+	private void notifyLostLock() {
+		// Additional check we are not initializing or have no locking object anymore because of a shutdown
+		if (lockListeners != null && liveLock != null) { 
+			Set<LockListener> lockListenersSnapshot = null;
+
+			// Snapshot of the set because I'm not sure if we can trigger concurrent
+			// modification exception here if we don't
+			synchronized (lockListeners) {
+				lockListenersSnapshot = new HashSet<>(lockListeners);
+			}
+
+			lockListenersSnapshot.forEach(lockListener -> {
+				try {
+					lockListener.lostLock();
+				} catch (Exception e) {
+					// Need to notify everyone so ignore any exception
+				}
+			});
+		}
+	}
+   
+   
+	public void registerLockListener(LockListener lockListener) {
+		lockListeners.add(lockListener);
+	}
+
+	public void unregisterLockListener(LockListener lockListener) {
+		lockListeners.remove(lockListener);
+	}
+
+   protected final Set<LockListener> lockListeners = Collections.synchronizedSet(new HashSet<LockListener>());
+   
+   public abstract class LockListener	{
+	   protected abstract void lostLock() throws Exception;
+	   
+	   protected void unregisterListener()	{
+		   lockListeners.remove(this);
+	   }
+   }
+   
+   public class MonitorLock	implements Runnable {
+
+	@Override
+	public void run() {
+		boolean live = (liveLock != null);
+		boolean lostLock;
+		boolean keepMonitoring = true;
+		
+		while (keepMonitoring)	{
+			lostLock = true;
+			try {
+				lostLock = (liveLock != null && !liveLock.isValid()) || liveLock == null;
+				if (!lostLock)	{
+					logger.debug("Server still has the lock, double check status is live");
+			// Should be able to retrieve the status unless something is wrong
+			// When EFS is gone, this locks. Which can be solved but is a lot of threading work where we need to
+			// manage the timeout ourselves and interrupt the thread used to claim the lock.
+					byte state = getState();
+					if (state == LIVE)	{
+						logger.debug("Status is set to live"); 
+					} else {
+						logger.debug("Status is not live");
+					}
+				}
+			} catch (Exception exception) {
+				// If something went wrong we probably lost the lock
+				logger.error(exception.getMessage(), exception);
+				lostLock = true;
+			}
+			
+			if (lostLock)	{
+				logger.warn("Lost the lock according to the monitor, notifying listeners");
+				notifyLostLock();
+			}
+			
+			try {
+				Thread.sleep(LOCK_MONITOR_TIMEOUT_MILLIES);
+			} catch (InterruptedException e) {
+				// Let's check if we need to stop or continue
+			}
+
+			live = liveLock != null;
+			keepMonitoring = live && !lostLock;
+			if (!keepMonitoring)	{
+				logger.info("Bailing out the locking monitoring");
+			}
+		}
+	}
+	   
    }
 
 }
