@@ -49,6 +49,10 @@ public class QueueQueryResult {
 
    private Boolean exclusive;
 
+   private Boolean groupRebalance;
+
+   private Integer groupBuckets;
+
    private Boolean lastValue;
 
    private SimpleString lastValueKey;
@@ -58,6 +62,12 @@ public class QueueQueryResult {
    private Integer consumersBeforeDispatch;
 
    private Long delayBeforeDispatch;
+
+   private Boolean autoDelete;
+
+   private Long autoDeleteDelay;
+
+   private Long autoDeleteMessageCount;
 
    private Integer defaultConsumerWindowSize;
 
@@ -75,11 +85,16 @@ public class QueueQueryResult {
                            final RoutingType routingType,
                            final int maxConsumers,
                            final Boolean exclusive,
+                           final Boolean groupRebalance,
+                           final Integer groupBuckets,
                            final Boolean lastValue,
                            final SimpleString lastValueKey,
                            final Boolean nonDestructive,
                            final Integer consumersBeforeDispatch,
                            final Long delayBeforeDispatch,
+                           final Boolean autoDelete,
+                           final Long autoDeleteDelay,
+                           final Long autoDeleteMessageCount,
                            final Integer defaultConsumerWindowSize) {
       this.durable = durable;
 
@@ -109,6 +124,10 @@ public class QueueQueryResult {
 
       this.exclusive = exclusive;
 
+      this.groupRebalance = groupRebalance;
+
+      this.groupBuckets = groupBuckets;
+
       this.lastValue = lastValue;
 
       this.lastValueKey = lastValueKey;
@@ -118,6 +137,12 @@ public class QueueQueryResult {
       this.consumersBeforeDispatch = consumersBeforeDispatch;
 
       this.delayBeforeDispatch = delayBeforeDispatch;
+
+      this.autoDelete = autoDelete;
+
+      this.autoDeleteDelay = autoDeleteDelay;
+
+      this.autoDeleteMessageCount = autoDeleteMessageCount;
 
       this.defaultConsumerWindowSize = defaultConsumerWindowSize;
    }
@@ -204,5 +229,25 @@ public class QueueQueryResult {
 
    public Integer getDefaultConsumerWindowSize() {
       return defaultConsumerWindowSize;
+   }
+
+   public Boolean isGroupRebalance() {
+      return groupRebalance;
+   }
+
+   public Integer getGroupBuckets() {
+      return groupBuckets;
+   }
+
+   public Boolean isAutoDelete() {
+      return autoDelete;
+   }
+
+   public Long getAutoDeleteDelay() {
+      return autoDeleteDelay;
+   }
+
+   public Long getAutoDeleteMessageCount() {
+      return autoDeleteMessageCount;
    }
 }

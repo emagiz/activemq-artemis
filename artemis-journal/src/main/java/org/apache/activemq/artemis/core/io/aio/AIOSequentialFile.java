@@ -33,7 +33,7 @@ import org.apache.activemq.artemis.core.io.DummyCallback;
 import org.apache.activemq.artemis.core.io.IOCallback;
 import org.apache.activemq.artemis.core.io.SequentialFile;
 import org.apache.activemq.artemis.core.journal.impl.SimpleWaitIOCallback;
-import org.apache.activemq.artemis.jlibaio.LibaioFile;
+import org.apache.activemq.artemis.nativo.jlibaio.LibaioFile;
 import org.apache.activemq.artemis.journal.ActiveMQJournalLogger;
 import org.apache.activemq.artemis.utils.ReusableLatch;
 import org.jboss.logging.Logger;
@@ -85,11 +85,7 @@ public class AIOSequentialFile extends AbstractSequentialFile {
 
    @Override
    public int calculateBlockStart(final int position) {
-      int alignment = factory.getAlignment();
-
-      int pos = (position / alignment + (position % alignment != 0 ? 1 : 0)) * alignment;
-
-      return pos;
+      return factory.calculateBlockSize(position);
    }
 
    @Override

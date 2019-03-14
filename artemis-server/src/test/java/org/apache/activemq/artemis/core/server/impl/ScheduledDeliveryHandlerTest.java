@@ -839,6 +839,26 @@ public class ScheduledDeliveryHandlerTest extends Assert {
       }
 
       @Override
+      public int getGroupBuckets() {
+         return 0;
+      }
+
+      @Override
+      public void setGroupBuckets(int groupBuckets) {
+
+      }
+
+      @Override
+      public boolean isGroupRebalance() {
+         return false;
+      }
+
+      @Override
+      public void setGroupRebalance(boolean groupRebalance) {
+
+      }
+
+      @Override
       public boolean isConfigurationManaged() {
          return false;
       }
@@ -924,6 +944,24 @@ public class ScheduledDeliveryHandlerTest extends Assert {
       @Override
       public boolean isDurableMessage() {
          return false;
+      }
+
+      @Override
+      public boolean isAutoDelete() {
+         // no-op
+         return false;
+      }
+
+      @Override
+      public long getAutoDeleteDelay() {
+         // no-op
+         return -1;
+      }
+
+      @Override
+      public long getAutoDeleteMessageCount() {
+         // no-op
+         return -1;
       }
 
       @Override

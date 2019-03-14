@@ -86,7 +86,6 @@ import org.apache.activemq.artemis.core.protocol.core.impl.wireformat.SessionXAS
 import org.apache.activemq.artemis.core.protocol.core.impl.wireformat.SessionXAStartMessage;
 import org.apache.activemq.artemis.core.remoting.CloseListener;
 import org.apache.activemq.artemis.core.remoting.FailureListener;
-import org.apache.activemq.artemis.core.remoting.impl.netty.NettyConnection;
 import org.apache.activemq.artemis.core.server.ActiveMQMessageBundle;
 import org.apache.activemq.artemis.core.server.ActiveMQServer;
 import org.apache.activemq.artemis.core.server.ActiveMQServerLogger;
@@ -192,11 +191,7 @@ public class ServerSessionPacketHandler implements ChannelHandler {
       // use the same executor
       this.packetActor = new Actor<>(callExecutor, this::onMessagePacket);
 
-      if (conn instanceof NettyConnection) {
-         direct = ((NettyConnection) conn).isDirectDeliver();
-      } else {
-         direct = false;
-      }
+      this.direct = conn.isDirectDeliver();
    }
 
    private void clearLargeMessage() {
@@ -362,7 +357,8 @@ public class ServerSessionPacketHandler implements ChannelHandler {
                   CreateQueueMessage_V2 request = (CreateQueueMessage_V2) packet;
                   requiresResponse = request.isRequiresResponse();
                   session.createQueue(request.getAddress(), request.getQueueName(), request.getRoutingType(), request.getFilterString(), request.isTemporary(), request.isDurable(), request.getMaxConsumers(), request.isPurgeOnNoConsumers(),
-                                      request.isExclusive(), request.isLastValue(), request.getLastValueKey(), request.isNonDestructive(), request.getConsumersBeforeDispatch(), request.getDelayBeforeDispatch(), request.isAutoCreated());
+                                      request.isExclusive(), request.isGroupRebalance(), request.getGroupBuckets(), request.isLastValue(), request.getLastValueKey(), request.isNonDestructive(), request.getConsumersBeforeDispatch(), request.getDelayBeforeDispatch(),
+                                      request.isAutoDelete(), request.getAutoDeleteDelay(), request.getAutoDeleteMessageCount(), request.isAutoCreated());
                   if (requiresResponse) {
                      response = createNullResponseMessage(packet);
                   }
@@ -386,7 +382,8 @@ public class ServerSessionPacketHandler implements ChannelHandler {
                   QueueQueryResult result = session.executeQueueQuery(request.getQueueName());
                   if (!(result.isExists() && Objects.equals(result.getAddress(), request.getAddress()) && Objects.equals(result.getFilterString(), request.getFilterString()))) {
                      session.createSharedQueue(request.getAddress(), request.getQueueName(), request.getRoutingType(), request.getFilterString(), request.isDurable(), request.getMaxConsumers(), request.isPurgeOnNoConsumers(),
-                                               request.isExclusive(), request.isLastValue(), request.getLastValueKey(), request.isNonDestructive(), request.getConsumersBeforeDispatch(), request.getDelayBeforeDispatch());
+                                               request.isExclusive(), request.isGroupRebalance(), request.getGroupBuckets(), request.isLastValue(), request.getLastValueKey(), request.isNonDestructive(), request.getConsumersBeforeDispatch(), request.getDelayBeforeDispatch(),
+                                               request.isAutoDelete(), request.getAutoDeleteDelay(), request.getAutoDeleteMessageCount());
                   }
                   if (requiresResponse) {
                      response = createNullResponseMessage(packet);

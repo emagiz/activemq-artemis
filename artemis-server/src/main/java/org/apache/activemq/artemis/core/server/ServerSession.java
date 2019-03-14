@@ -181,11 +181,16 @@ public interface ServerSession extends SecurityAuth {
                      int maxConsumers,
                      boolean purgeOnNoConsumers,
                      Boolean exclusive,
+                     Boolean groupRebalance,
+                     Integer groupBuckets,
                      Boolean lastValue,
                      SimpleString lastValueKey,
                      Boolean nonDestructive,
                      Integer consumersBeforeDispatch,
                      Long delayBeforeDispatch,
+                     Boolean autoDelete,
+                     Long autoDeleteDelay,
+                     Long autoDeleteMessageCount,
                      boolean autoCreated) throws Exception;
 
    Queue createQueue(SimpleString address,
@@ -335,11 +340,16 @@ public interface ServerSession extends SecurityAuth {
                           Integer maxConsumers,
                           Boolean purgeOnNoConsumers,
                           Boolean exclusive,
+                          Boolean groupRebalance,
+                          Integer groupBuckets,
                           Boolean lastValue,
                           SimpleString lastValueKey,
                           Boolean nonDestructive,
                           Integer consumersBeforeDispatch,
-                          Long delayBeforeDispatch) throws Exception;
+                          Long delayBeforeDispatch,
+                          Boolean autoDelete,
+                          Long autoDeleteDelay,
+                          Long autoDeleteMessageCount) throws Exception;
 
    void createSharedQueue(SimpleString address,
                           SimpleString name,

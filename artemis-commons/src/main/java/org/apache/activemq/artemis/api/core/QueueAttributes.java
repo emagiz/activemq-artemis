@@ -26,6 +26,8 @@ public class QueueAttributes implements Serializable {
    public static final String DURABLE = "durable";
    public static final String MAX_CONSUMERS = "max-consumers";
    public static final String EXCLUSIVE = "exclusive";
+   public static final String GROUP_REBALANCE = "group-rebalance";
+   public static final String GROUP_BUCKETS = "group-buckets";
    public static final String LAST_VALUE = "last-value";
    public static final String LAST_VALUE_KEY = "last-value-key";
    public static final String NON_DESTRUCTIVE = "non-destructive";
@@ -33,12 +35,17 @@ public class QueueAttributes implements Serializable {
    public static final String CONSUMERS_BEFORE_DISPATCH = "consumers-before-dispatch";
    public static final String DELAY_BEFORE_DISPATCH = "delay-before-dispatch";
    public static final String CONSUMER_PRIORITY = "consumer-priority";
+   public static final String AUTO_DELETE = "auto-delete";
+   public static final String AUTO_DELETE_DELAY = "auto-delete-delay";
+   public static final String AUTO_DELETE_MESSAGE_COUNT = "auto-delete-message-count";
 
    private RoutingType routingType;
    private SimpleString filterString;
    private Boolean durable;
    private Integer maxConsumers;
    private Boolean exclusive;
+   private Boolean groupRebalance;
+   private Integer groupBuckets;
    private Boolean lastValue;
    private SimpleString lastValueKey;
    private Boolean nonDestructive;
@@ -46,6 +53,10 @@ public class QueueAttributes implements Serializable {
    private Integer consumersBeforeDispatch;
    private Long delayBeforeDispatch;
    private Integer consumerPriority;
+   private Boolean autoDelete;
+   private Long autoDeleteDelay;
+   private Long autoDeleteMessageCount;
+
 
    public void set(String key, String value) {
       if (key != null && value != null) {
@@ -73,6 +84,16 @@ public class QueueAttributes implements Serializable {
             setDelayBeforeDispatch(Long.valueOf(value));
          } else if (key.equals(CONSUMER_PRIORITY)) {
             setConsumerPriority(Integer.valueOf(value));
+         } else if (key.equals(GROUP_REBALANCE)) {
+            setGroupRebalance(Boolean.valueOf(value));
+         } else if (key.equals(GROUP_BUCKETS)) {
+            setGroupBuckets(Integer.valueOf(value));
+         } else if (key.equals(AUTO_DELETE)) {
+            setAutoDelete(Boolean.valueOf(value));
+         } else if (key.equals(AUTO_DELETE_DELAY)) {
+            setAutoDeleteDelay(Long.valueOf(value));
+         } else if (key.equals(AUTO_DELETE_MESSAGE_COUNT)) {
+            setAutoDeleteMessageCount(Long.valueOf(value));
          }
       }
    }
@@ -185,4 +206,48 @@ public class QueueAttributes implements Serializable {
       return this;
    }
 
+   public Boolean getGroupRebalance() {
+      return groupRebalance;
+   }
+
+   public QueueAttributes setGroupRebalance(Boolean groupRebalance) {
+      this.groupRebalance = groupRebalance;
+      return this;
+   }
+
+   public Integer getGroupBuckets() {
+      return groupBuckets;
+   }
+
+   public QueueAttributes setGroupBuckets(Integer groupBuckets) {
+      this.groupBuckets = groupBuckets;
+      return this;
+   }
+
+   public Boolean getAutoDelete() {
+      return autoDelete;
+   }
+
+   public QueueAttributes setAutoDelete(Boolean autoDelete) {
+      this.autoDelete = autoDelete;
+      return this;
+   }
+
+   public Long getAutoDeleteDelay() {
+      return autoDeleteDelay;
+   }
+
+   public QueueAttributes setAutoDeleteDelay(Long autoDeleteDelay) {
+      this.autoDeleteDelay = autoDeleteDelay;
+      return this;
+   }
+
+   public Long getAutoDeleteMessageCount() {
+      return autoDeleteMessageCount;
+   }
+
+   public QueueAttributes setAutoDeleteMessageCount(Long autoDeleteMessageCount) {
+      this.autoDeleteMessageCount = autoDeleteMessageCount;
+      return this;
+   }
 }

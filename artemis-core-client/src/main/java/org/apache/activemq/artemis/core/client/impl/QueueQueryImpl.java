@@ -50,6 +50,10 @@ public class QueueQueryImpl implements ClientSession.QueueQuery {
 
    private final Boolean exclusive;
 
+   private final Boolean groupRebalance;
+
+   private final Integer groupBuckets;
+
    private final Boolean lastValue;
 
    private final SimpleString lastValueKey;
@@ -59,6 +63,12 @@ public class QueueQueryImpl implements ClientSession.QueueQuery {
    private final Integer consumersBeforeDispatch;
 
    private final Long delayBeforeDispatch;
+
+   private final Boolean autoDelete;
+
+   private final Long autoDeleteDelay;
+
+   private final Long autoDeleteMessageCount;
 
 
    private final Integer defaultConsumerWindowSize;
@@ -118,7 +128,7 @@ public class QueueQueryImpl implements ClientSession.QueueQuery {
                          final Boolean exclusive,
                          final Boolean lastValue,
                          final Integer defaultConsumerWindowSize) {
-      this(durable, temporary, consumerCount, messageCount, filterString, address, name, exists, autoCreateQueues, maxConsumers, autoCreated, purgeOnNoConsumers, routingType, exclusive, lastValue, null, null, null, null, defaultConsumerWindowSize);
+      this(durable, temporary, consumerCount, messageCount, filterString, address, name, exists, autoCreateQueues, maxConsumers, autoCreated, purgeOnNoConsumers, routingType, exclusive, null, null, lastValue, null, null, null, null, null, null, null, defaultConsumerWindowSize);
    }
 
    public QueueQueryImpl(final boolean durable,
@@ -135,11 +145,16 @@ public class QueueQueryImpl implements ClientSession.QueueQuery {
                          final boolean purgeOnNoConsumers,
                          final RoutingType routingType,
                          final Boolean exclusive,
+                         final Boolean groupRebalance,
+                         final Integer groupBuckets,
                          final Boolean lastValue,
                          final SimpleString lastValueKey,
                          final Boolean nonDestructive,
                          final Integer consumersBeforeDispatch,
                          final Long delayBeforeDispatch,
+                         final Boolean autoDelete,
+                         final Long autoDeleteDelay,
+                         final Long autoDeleteMessageCount,
                          final Integer defaultConsumerWindowSize) {
       this.durable = durable;
       this.temporary = temporary;
@@ -155,11 +170,16 @@ public class QueueQueryImpl implements ClientSession.QueueQuery {
       this.purgeOnNoConsumers = purgeOnNoConsumers;
       this.routingType = routingType;
       this.exclusive = exclusive;
+      this.groupRebalance = groupRebalance;
+      this.groupBuckets = groupBuckets;
       this.lastValue = lastValue;
       this.lastValueKey = lastValueKey;
       this.nonDestructive = nonDestructive;
       this.consumersBeforeDispatch = consumersBeforeDispatch;
       this.delayBeforeDispatch = delayBeforeDispatch;
+      this.autoDelete = autoDelete;
+      this.autoDeleteDelay = autoDeleteDelay;
+      this.autoDeleteMessageCount = autoDeleteMessageCount;
       this.defaultConsumerWindowSize = defaultConsumerWindowSize;
    }
 
@@ -261,6 +281,31 @@ public class QueueQueryImpl implements ClientSession.QueueQuery {
    @Override
    public Integer getDefaultConsumerWindowSize() {
       return defaultConsumerWindowSize;
+   }
+
+   @Override
+   public Boolean isGroupRebalance() {
+      return groupRebalance;
+   }
+
+   @Override
+   public Integer getGroupBuckets() {
+      return groupBuckets;
+   }
+
+   @Override
+   public Boolean isAutoDelete() {
+      return autoDelete;
+   }
+
+   @Override
+   public Long getAutoDeleteDelay() {
+      return autoDeleteDelay;
+   }
+
+   @Override
+   public Long getAutoDeleteMessageCount() {
+      return autoDeleteMessageCount;
    }
 }
 

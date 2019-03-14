@@ -71,7 +71,7 @@ import org.apache.activemq.artemis.core.server.ServerSession;
 import org.apache.activemq.artemis.core.server.impl.AddressInfo;
 import org.apache.activemq.artemis.core.settings.impl.SlowConsumerPolicy;
 import org.apache.activemq.artemis.core.transaction.impl.XidImpl;
-import org.apache.activemq.artemis.jlibaio.LibaioContext;
+import org.apache.activemq.artemis.nativo.jlibaio.LibaioContext;
 import org.apache.activemq.artemis.jms.client.ActiveMQConnection;
 import org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory;
 import org.apache.activemq.artemis.jms.client.ActiveMQSession;
@@ -985,6 +985,55 @@ public class ActiveMQServerControlTest extends ManagementTestBase {
    }
 
    @Test
+   public void testListPreparedTransactionDetailsOnConsumer() throws Exception {
+      SimpleString atestq = new SimpleString("BasicXaTestq");
+      Xid xid = newXID();
+
+      ServerLocator locator = createInVMNonHALocator();
+      ClientSessionFactory csf = createSessionFactory(locator);
+      ClientSession clientSession = csf.createSession(true, false, false);
+      clientSession.createQueue(atestq, atestq, null, true);
+
+      ClientMessage m1 = createTextMessage(clientSession, "");
+      ClientMessage m2 = createTextMessage(clientSession, "");
+      ClientMessage m3 = createTextMessage(clientSession, "");
+      ClientMessage m4 = createTextMessage(clientSession, "");
+      m1.putStringProperty("m1", "valuem1");
+      m2.putStringProperty("m2", "valuem2");
+      m3.putStringProperty("m3", "valuem3");
+      m4.putStringProperty("m4", "valuem4");
+      ClientProducer clientProducer = clientSession.createProducer(atestq);
+      clientSession.start(xid, XAResource.TMNOFLAGS);
+      clientProducer.send(m1);
+      clientProducer.send(m2);
+      clientProducer.send(m3);
+      clientProducer.send(m4);
+      clientSession.end(xid, XAResource.TMSUCCESS);
+      clientSession.prepare(xid);
+      clientSession.commit(xid, false);
+
+      ClientConsumer consumer = clientSession.createConsumer(atestq);
+      clientSession.start();
+      xid = newXID();
+      clientSession.start(xid, XAResource.TMNOFLAGS);
+      m1 = consumer.receive(1000);
+      Assert.assertNotNull(m1);
+      m1.acknowledge();
+      clientSession.end(xid, XAResource.TMSUCCESS);
+      clientSession.prepare(xid);
+      ActiveMQServerControl serverControl = createManagementControl();
+      String jsonOutput = serverControl.listPreparedTransactionDetailsAsJSON();
+
+      // just one message is pending, and it should be listed on the output
+      Assert.assertTrue(jsonOutput.lastIndexOf("valuem1") > 0);
+      Assert.assertTrue(jsonOutput.lastIndexOf("valuem2") < 0);
+      Assert.assertTrue(jsonOutput.lastIndexOf("valuem3") < 0);
+      Assert.assertTrue(jsonOutput.lastIndexOf("valuem4") < 0);
+      clientSession.close();
+      locator.close();
+   }
+
+   @Test
    public void testListPreparedTransactionDetailsAsHTML() throws Exception {
       SimpleString atestq = new SimpleString("BasicXaTestq");
       Xid xid = newXID();
@@ -1667,7 +1716,11 @@ public class ActiveMQServerControlTest extends ManagementTestBase {
       Assert.assertEquals("messagesAcked", "0", array.getJsonObject(0).getString("messagesAcked"));
       Assert.assertEquals("deliveringCount", "0", array.getJsonObject(0).getString("deliveringCount"));
       Assert.assertEquals("messagesKilled", "0", array.getJsonObject(0).getString("messagesKilled"));
-      Assert.assertEquals("deliverDeliver", "true", array.getJsonObject(0).getString("deliverDeliver"));
+      String resultDirectDeliver = array.getJsonObject(0).getString("deliverDeliver");
+      // if there is a core consumer, the result here would be true (if directDeliver is supported).
+      // as for what we expect it's either true or false through management, we are not testing for directDeliver here, just
+      // if management works.
+      Assert.assertTrue(resultDirectDeliver.equals("true") || resultDirectDeliver.equals("false"));
 
    }
 
@@ -2681,6 +2734,46 @@ public class ActiveMQServerControlTest extends ManagementTestBase {
       serverControl.closeConsumerWithID(sessionID, Long.toString(clientID));
       Wait.waitFor(() -> ((org.apache.activemq.artemis.jms.client.ActiveMQMessageConsumer)JMSclient).isClosed());
       Assert.assertTrue(((org.apache.activemq.artemis.jms.client.ActiveMQMessageConsumer)JMSclient).isClosed());
+   }
+
+   @Test
+   public void testAddUser() throws Exception {
+      ActiveMQServerControl serverControl = createManagementControl();
+      try {
+         serverControl.addUser("x", "x", "x", true);
+         fail();
+      } catch (Exception expected) {
+      }
+   }
+
+   @Test
+   public void testRemoveUser() throws Exception {
+      ActiveMQServerControl serverControl = createManagementControl();
+      try {
+         serverControl.removeUser("x");
+         fail();
+      } catch (Exception expected) {
+      }
+   }
+
+   @Test
+   public void testListUser() throws Exception {
+      ActiveMQServerControl serverControl = createManagementControl();
+      try {
+         serverControl.listUser("x");
+         fail();
+      } catch (Exception expected) {
+      }
+   }
+
+   @Test
+   public void testResetUser() throws Exception {
+      ActiveMQServerControl serverControl = createManagementControl();
+      try {
+         serverControl.resetUser("x","x","x");
+         fail();
+      } catch (Exception expected) {
+      }
    }
 
 

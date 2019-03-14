@@ -244,7 +244,7 @@ public final class TimedBuffer extends CriticalComponentImpl {
             }
 
             if (sizeChecked > bufferSize) {
-               throw new IllegalStateException("Can't write records bigger than the bufferSize(" + bufferSize + ") on the journal");
+               throw new IllegalStateException("Can't write records (size=" + sizeChecked + ") bigger than the bufferSize(" + bufferSize + ") on the journal");
             }
 
             if (bufferLimit == 0 || buffer.writerIndex() + sizeChecked > bufferLimit) {
@@ -358,13 +358,7 @@ public final class TimedBuffer extends CriticalComponentImpl {
                   bytesFlushed.addAndGet(pos);
                }
 
-               final ByteBuffer bufferToFlush = bufferObserver.newBuffer(bufferSize, pos);
-               //bufferObserver::newBuffer doesn't necessary return a buffer with limit == pos or limit == bufferSize!!
-               bufferToFlush.limit(pos);
-               //perform memcpy under the hood due to the off heap buffer
-               buffer.getBytes(0, bufferToFlush);
-
-               bufferObserver.flushBuffer(bufferToFlush, pendingSync, callbacks);
+               bufferObserver.flushBuffer(buffer.byteBuf(), pendingSync, callbacks);
 
                stopSpin();
 

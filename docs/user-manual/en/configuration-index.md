@@ -79,6 +79,16 @@ This is to help you customize artemis on embedded systems.
 This describes the root of the XML configuration. You will see here also multiple sub-types listed.
 For example on the main config you will have bridges and at the [list of bridge](#bridge-type) type we will describe the properties for that configuration.
 
+> **Warning**
+>
+> The default values listed below are the values which will be used if
+> the configuration parameter is **not set** either programmatically or
+> via `broker.xml`. Some of these values are set in the `broker.xml`
+> which is available out-of-the-box. Any values set in the
+> out-of-the-box configuration will override the default values listed
+> here. Please consult your specific configuration to know which values
+> will actually be used when the broker is running.
+
 Name | Description | Default
 ---|---|---
 [acceptors](configuring-transports.md#acceptors) | a list of remoting acceptors | n/a
@@ -119,6 +129,7 @@ Name | Description | Default
 [journal-compact-min-files](persistence.md#configuring-the-message-journal) | The minimal number of data files before we can start compacting. Setting this to 0 means compacting is disabled. | 10
 [journal-compact-percentage](persistence.md#configuring-the-message-journal) | The percentage of live data on which we consider compacting the journal. | 30
 [journal-directory](persistence.md#configuring-the-message-journal) | the directory to store the journal files in. | `data/journal`
+[node-manager-lock-directory](persistence.md#configuring-the-message-journal) | the directory to store the node manager lock file. | same of `journal-directory`
 [journal-file-size](persistence.md#configuring-the-message-journal) | the size (in bytes) of each journal file. | 10MB
 [journal-lock-acquisition-timeout](persistence.md#configuring-the-message-journal) | how long (in ms) to wait to acquire a file lock on the journal. | -1
 [journal-max-io](persistence.md#configuring-the-message-journal) | the maximum number of write requests that can be in the ASYNCIO queue at any one time. | 4096 for ASYNCIO; 1 for NIO; ignored for MAPPED
@@ -135,7 +146,7 @@ log-delegate-factory-class-name | **deprecated** the name of the factory class t
 [management-notification-address](management.md#configuring-the-management-notification-address) | the name of the address that consumers bind to receive management notifications. | `activemq.notifications`
 [mask-password](masking-passwords.md) | This option controls whether passwords in server configuration need be masked. If set to "true" the passwords are masked. | `false`
 [max-saved-replicated-journals-size](ha.md#data-replication) | This specifies how many times a replicated backup server can restart after moving its files on start. Once there are this number of backup journal files the server will stop permanently after if fails back. -1 Means no Limit; 0 don't keep a copy at all. | 2
-[max-disk-usage](paging.md#max-disk-usage) | The max percentage of data we should use from disks. The System will block while the disk is full. Disable by setting -1. | 100
+[max-disk-usage](paging.md#max-disk-usage) | The max percentage of data we should use from disks. The broker will block while the disk is full. Disable by setting -1. | 90
 [memory-measure-interval](perf-tuning.md) | frequency to sample JVM memory in ms (or -1 to disable memory sampling). | -1
 [memory-warning-threshold](perf-tuning.md)| Percentage of available memory which will trigger a warning log. | 25
 [message-counter-enabled](management.md#message-counters) | true means that message counters are enabled. | `false`

@@ -66,6 +66,12 @@ public interface Queue extends Bindable,CriticalComponent {
     */
    boolean isDurableMessage();
 
+   boolean isAutoDelete();
+
+   long getAutoDeleteDelay();
+
+   long getAutoDeleteMessageCount();
+
    boolean isTemporary();
 
    boolean isAutoCreated();
@@ -103,6 +109,14 @@ public interface Queue extends Bindable,CriticalComponent {
    int getMaxConsumers();
 
    void setMaxConsumer(int maxConsumers);
+
+   int getGroupBuckets();
+
+   void setGroupBuckets(int groupBuckets);
+
+   boolean isGroupRebalance();
+
+   void setGroupRebalance(boolean groupRebalance);
 
    boolean isConfigurationManaged();
 

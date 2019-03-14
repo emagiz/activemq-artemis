@@ -1350,10 +1350,12 @@ public final class ClientSessionImpl implements ClientSessionInternal, FailureLi
    // Needs to be synchronized to prevent issues with occurring concurrently with close()
 
    @Override
-   public void handleFailover(final RemotingConnection backupConnection, ActiveMQException cause) {
+   public boolean handleFailover(final RemotingConnection backupConnection, ActiveMQException cause) {
+      boolean suc = true;
+
       synchronized (this) {
          if (closed) {
-            return;
+            return true;
          }
 
          boolean resetCreditManager = false;
@@ -1426,6 +1428,7 @@ public final class ClientSessionImpl implements ClientSessionInternal, FailureLi
             }
          } catch (Throwable t) {
             ActiveMQClientLogger.LOGGER.failedToHandleFailover(t);
+            suc = false;
          } finally {
             sessionContext.releaseCommunications();
          }
@@ -1447,6 +1450,8 @@ public final class ClientSessionImpl implements ClientSessionInternal, FailureLi
       }
 
       sessionContext.resetMetadata(metaDataToSend);
+
+      return suc;
 
    }
 
@@ -1496,8 +1501,7 @@ public final class ClientSessionImpl implements ClientSessionInternal, FailureLi
    @Override
    public ClientProducerCredits getCredits(final SimpleString address, final boolean anon) {
       synchronized (producerCreditManager) {
-         ClientProducerCredits credits = producerCreditManager.getCredits(address, anon, sessionContext);
-         return credits;
+         return producerCreditManager.getCredits(address, anon, sessionContext);
       }
    }
 
@@ -1574,7 +1578,7 @@ public final class ClientSessionImpl implements ClientSessionInternal, FailureLi
       } catch (Throwable t) {
          ActiveMQClientLogger.LOGGER.failoverDuringCommit();
 
-         XAException xaException = null;
+         XAException xaException;
          if (onePhase) {
             logger.debug("Throwing oneFase RMFAIL on xid=" + xid, t);
             //we must return XA_RMFAIL
@@ -2020,8 +2024,7 @@ public final class ClientSessionImpl implements ClientSessionInternal, FailureLi
 
    private ClientConsumerInternal getConsumer(final ConsumerContext consumerContext) {
       synchronized (consumers) {
-         ClientConsumerInternal consumer = consumers.get(consumerContext);
-         return consumer;
+         return consumers.get(consumerContext);
       }
    }
 

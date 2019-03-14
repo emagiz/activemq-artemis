@@ -49,9 +49,14 @@ import org.apache.activemq.artemis.core.config.ConnectorServiceConfiguration;
 import org.apache.activemq.artemis.core.config.CoreAddressConfiguration;
 import org.apache.activemq.artemis.core.config.CoreQueueConfiguration;
 import org.apache.activemq.artemis.core.config.DivertConfiguration;
+import org.apache.activemq.artemis.core.config.FederationConfiguration;
 import org.apache.activemq.artemis.core.config.ScaleDownConfiguration;
 import org.apache.activemq.artemis.core.config.TransformerConfiguration;
 import org.apache.activemq.artemis.core.config.WildcardConfiguration;
+import org.apache.activemq.artemis.core.config.federation.FederationAddressPolicyConfiguration;
+import org.apache.activemq.artemis.core.config.federation.FederationPolicySet;
+import org.apache.activemq.artemis.core.config.federation.FederationQueuePolicyConfiguration;
+import org.apache.activemq.artemis.core.config.federation.FederationUpstreamConfiguration;
 import org.apache.activemq.artemis.core.config.ha.ColocatedPolicyConfiguration;
 import org.apache.activemq.artemis.core.config.ha.LiveOnlyPolicyConfiguration;
 import org.apache.activemq.artemis.core.config.ha.ReplicaPolicyConfiguration;
@@ -187,6 +192,10 @@ public final class FileConfigurationParser extends XMLConfigurationUtil {
 
    private static final String DEFAULT_EXCLUSIVE_NODE_NAME = "default-exclusive-queue";
 
+   private static final String DEFAULT_GROUP_REBALANCE = "default-group-rebalance";
+
+   private static final String DEFAULT_GROUP_BUCKETS = "default-group-buckets";
+
    private static final String DEFAULT_CONSUMERS_BEFORE_DISPATCH = "default-consumers-before-dispatch";
 
    private static final String DEFAULT_DELAY_BEFORE_DISPATCH = "default-delay-before-dispatch";
@@ -214,6 +223,8 @@ public final class FileConfigurationParser extends XMLConfigurationUtil {
    private static final String AUTO_DELETE_QUEUES = "auto-delete-queues";
 
    private static final String AUTO_DELETE_QUEUES_DELAY = "auto-delete-queues-delay";
+
+   private static final String AUTO_DELETE_QUEUES_MESSAGE_COUNT = "auto-delete-queues-message-count";
 
    private static final String CONFIG_DELETE_QUEUES = "config-delete-queues";
 
@@ -503,6 +514,14 @@ public final class FileConfigurationParser extends XMLConfigurationUtil {
          parseBridgeConfiguration(mfNode, config);
       }
 
+      NodeList fedNodes = e.getElementsByTagName("federation");
+
+      for (int i = 0; i < fedNodes.getLength(); i++) {
+         Element fedNode = (Element) fedNodes.item(i);
+
+         parseFederationConfiguration(fedNode, config);
+      }
+
       NodeList gaNodes = e.getElementsByTagName("grouping-handler");
 
       for (int i = 0; i < gaNodes.getLength(); i++) {
@@ -544,6 +563,8 @@ public final class FileConfigurationParser extends XMLConfigurationUtil {
       config.setCreateBindingsDir(getBoolean(e, "create-bindings-dir", config.isCreateBindingsDir()));
 
       config.setJournalDirectory(getString(e, "journal-directory", config.getJournalDirectory(), Validators.NOT_NULL_OR_EMPTY));
+
+      config.setNodeManagerLockDirectory(getString(e, "node-manager-lock-directory", null, Validators.NO_CHECK));
 
       config.setPageMaxConcurrentIO(getInteger(e, "page-max-concurrent-io", config.getPageMaxConcurrentIO(), Validators.MINUS_ONE_OR_GT_ZERO));
 
@@ -1016,6 +1037,10 @@ public final class FileConfigurationParser extends XMLConfigurationUtil {
             addressSettings.setDefaultNonDestructive(XMLUtil.parseBoolean(child));
          } else if (DEFAULT_EXCLUSIVE_NODE_NAME.equalsIgnoreCase(name)) {
             addressSettings.setDefaultExclusiveQueue(XMLUtil.parseBoolean(child));
+         } else if (DEFAULT_GROUP_REBALANCE.equalsIgnoreCase(name)) {
+            addressSettings.setDefaultGroupRebalance(XMLUtil.parseBoolean(child));
+         } else if (DEFAULT_GROUP_BUCKETS.equalsIgnoreCase(name)) {
+            addressSettings.setDefaultGroupBuckets(XMLUtil.parseInt(child));
          } else if (MAX_DELIVERY_ATTEMPTS.equalsIgnoreCase(name)) {
             addressSettings.setMaxDeliveryAttempts(XMLUtil.parseInt(child));
          } else if (REDISTRIBUTION_DELAY_NODE_NAME.equalsIgnoreCase(name)) {
@@ -1053,6 +1078,10 @@ public final class FileConfigurationParser extends XMLConfigurationUtil {
             long autoDeleteQueuesDelay = XMLUtil.parseLong(child);
             Validators.GE_ZERO.validate(AUTO_DELETE_QUEUES_DELAY, autoDeleteQueuesDelay);
             addressSettings.setAutoDeleteQueuesDelay(autoDeleteQueuesDelay);
+         } else if (AUTO_DELETE_QUEUES_MESSAGE_COUNT.equalsIgnoreCase(name)) {
+            long autoDeleteQueuesMessageCount = XMLUtil.parseLong(child);
+            Validators.MINUS_ONE_OR_GE_ZERO.validate(AUTO_DELETE_QUEUES_MESSAGE_COUNT, autoDeleteQueuesMessageCount);
+            addressSettings.setAutoDeleteQueuesMessageCount(autoDeleteQueuesMessageCount);
          } else if (CONFIG_DELETE_QUEUES.equalsIgnoreCase(name)) {
             String value = getTrimmedTextContent(child);
             Validators.DELETION_POLICY_TYPE.validate(CONFIG_DELETE_QUEUES, value);
@@ -1130,6 +1159,8 @@ public final class FileConfigurationParser extends XMLConfigurationUtil {
       boolean purgeOnNoConsumers = ActiveMQDefaultConfiguration.getDefaultPurgeOnNoConsumers();
       String user = null;
       Boolean exclusive = null;
+      Boolean groupRebalance = null;
+      Integer groupBuckets = null;
       Boolean lastValue = null;
       String lastValueKey = null;
       Boolean nonDestructive = null;
@@ -1146,6 +1177,10 @@ public final class FileConfigurationParser extends XMLConfigurationUtil {
             purgeOnNoConsumers = Boolean.parseBoolean(item.getNodeValue());
          } else if (item.getNodeName().equals("exclusive")) {
             exclusive = Boolean.parseBoolean(item.getNodeValue());
+         } else if (item.getNodeName().equals("group-rebalance")) {
+            groupRebalance = Boolean.parseBoolean(item.getNodeValue());
+         } else if (item.getNodeName().equals("group-buckets")) {
+            groupBuckets = Integer.parseInt(item.getNodeValue());
          } else if (item.getNodeName().equals("last-value")) {
             lastValue = Boolean.parseBoolean(item.getNodeValue());
          } else if (item.getNodeName().equals("last-value-key")) {
@@ -1174,8 +1209,22 @@ public final class FileConfigurationParser extends XMLConfigurationUtil {
          }
       }
 
-      return new CoreQueueConfiguration().setAddress(address).setName(name).setFilterString(filterString).setDurable(durable).setMaxConsumers(maxConsumers).setPurgeOnNoConsumers(purgeOnNoConsumers).setUser(user)
-                                         .setExclusive(exclusive).setLastValue(lastValue).setLastValueKey(lastValueKey).setNonDestructive(nonDestructive).setConsumersBeforeDispatch(consumersBeforeDispatch).setDelayBeforeDispatch(delayBeforeDispatch);
+      return new CoreQueueConfiguration()
+              .setAddress(address)
+              .setName(name)
+              .setFilterString(filterString)
+              .setDurable(durable)
+              .setMaxConsumers(maxConsumers)
+              .setPurgeOnNoConsumers(purgeOnNoConsumers)
+              .setUser(user)
+              .setExclusive(exclusive)
+              .setGroupRebalance(groupRebalance)
+              .setGroupBuckets(groupBuckets)
+              .setLastValue(lastValue)
+              .setLastValueKey(lastValueKey)
+              .setNonDestructive(nonDestructive)
+              .setConsumersBeforeDispatch(consumersBeforeDispatch)
+              .setDelayBeforeDispatch(delayBeforeDispatch);
    }
 
    protected CoreAddressConfiguration parseAddressConfiguration(final Node node) {
@@ -1847,6 +1896,222 @@ public final class FileConfigurationParser extends XMLConfigurationUtil {
       }
 
       mainConfig.getBridgeConfigurations().add(config);
+   }
+
+   private void parseFederationConfiguration(final Element fedNode, final Configuration mainConfig) throws Exception {
+      FederationConfiguration config = new FederationConfiguration();
+
+      String name = fedNode.getAttribute("name");
+      config.setName(name);
+
+      FederationConfiguration.Credentials credentials = new FederationConfiguration.Credentials();
+
+      // parsing federation password
+      String passwordTextFederation = fedNode.getAttribute("password");
+
+      if (passwordTextFederation != null && !passwordTextFederation.isEmpty()) {
+         String resolvedPassword = PasswordMaskingUtil.resolveMask(mainConfig.isMaskPassword(), passwordTextFederation, mainConfig.getPasswordCodec());
+         credentials.setPassword(resolvedPassword);
+      }
+
+      credentials.setUser(fedNode.getAttribute("user"));
+      config.setCredentials(credentials);
+
+      NodeList children = fedNode.getChildNodes();
+
+      for (int j = 0; j < children.getLength(); j++) {
+         Node child = children.item(j);
+
+         if (child.getNodeName().equals("upstream")) {
+            config.addUpstreamConfiguration(getUpstream((Element) child, mainConfig));
+         } else if (child.getNodeName().equals("policy-set")) {
+            config.addFederationPolicy(getPolicySet((Element)child, mainConfig));
+         } else if (child.getNodeName().equals("queue-policy")) {
+            config.addFederationPolicy(getQueuePolicy((Element)child, mainConfig));
+         } else if (child.getNodeName().equals("address-policy")) {
+            config.addFederationPolicy(getAddressPolicy((Element)child, mainConfig));
+         }
+      }
+
+      mainConfig.getFederationConfigurations().add(config);
+
+   }
+
+   private FederationQueuePolicyConfiguration getQueuePolicy(Element policyNod, final Configuration mainConfig) throws Exception {
+      FederationQueuePolicyConfiguration config = new FederationQueuePolicyConfiguration();
+      config.setName(policyNod.getAttribute("name"));
+
+      NamedNodeMap attributes = policyNod.getAttributes();
+      for (int i = 0; i < attributes.getLength(); i++) {
+         Node item = attributes.item(i);
+         if (item.getNodeName().equals("include-federated")) {
+            config.setIncludeFederated(Boolean.parseBoolean(item.getNodeValue()));
+         } else if (item.getNodeName().equals("priority-adjustment")) {
+            int priorityAdjustment = Integer.parseInt(item.getNodeValue());
+            config.setPriorityAdjustment(priorityAdjustment);
+         } else if (item.getNodeName().equals("transformer-ref")) {
+            String transformerRef = item.getNodeValue();
+            config.setTransformerRef(transformerRef);
+         }
+      }
+
+      NodeList children = policyNod.getChildNodes();
+
+      for (int j = 0; j < children.getLength(); j++) {
+         Node child = children.item(j);
+
+         if (child.getNodeName().equals("include")) {
+            config.addInclude(getQueueMatcher((Element) child));
+         } else if (child.getNodeName().equals("exclude")) {
+            config.addExclude(getQueueMatcher((Element) child));
+         }
+      }
+
+
+      return config;
+   }
+
+   private FederationQueuePolicyConfiguration.Matcher getQueueMatcher(Element child) {
+      FederationQueuePolicyConfiguration.Matcher matcher = new FederationQueuePolicyConfiguration.Matcher();
+      matcher.setAddressMatch(child.getAttribute("queue-match"));
+      matcher.setAddressMatch(child.getAttribute("address-match"));
+      return matcher;
+   }
+
+
+   private FederationAddressPolicyConfiguration getAddressPolicy(Element policyNod, final Configuration mainConfig) throws Exception {
+      FederationAddressPolicyConfiguration config = new FederationAddressPolicyConfiguration();
+      config.setName(policyNod.getAttribute("name"));
+
+      NamedNodeMap attributes = policyNod.getAttributes();
+      for (int i = 0; i < attributes.getLength(); i++) {
+         Node item = attributes.item(i);
+         if (item.getNodeName().equals("max-consumers")) {
+            int maxConsumers = Integer.parseInt(item.getNodeValue());
+            Validators.MINUS_ONE_OR_GE_ZERO.validate(item.getNodeName(), maxConsumers);
+            config.setMaxHops(maxConsumers);
+         } else if (item.getNodeName().equals("auto-delete")) {
+            boolean autoDelete = Boolean.parseBoolean(item.getNodeValue());
+            config.setAutoDelete(autoDelete);
+         } else if (item.getNodeName().equals("auto-delete-delay")) {
+            long autoDeleteDelay = Long.parseLong(item.getNodeValue());
+            Validators.GE_ZERO.validate("auto-delete-delay", autoDeleteDelay);
+            config.setAutoDeleteDelay(autoDeleteDelay);
+         } else if (item.getNodeName().equals("auto-delete-message-count")) {
+            long autoDeleteMessageCount = Long.parseLong(item.getNodeValue());
+            Validators.MINUS_ONE_OR_GE_ZERO.validate("auto-delete-message-count", autoDeleteMessageCount);
+            config.setAutoDeleteMessageCount(autoDeleteMessageCount);
+         } else if (item.getNodeName().equals("transformer-ref")) {
+            String transformerRef = item.getNodeValue();
+            config.setTransformerRef(transformerRef);
+         }
+      }
+
+      NodeList children = policyNod.getChildNodes();
+
+      for (int j = 0; j < children.getLength(); j++) {
+         Node child = children.item(j);
+
+         if (child.getNodeName().equals("include")) {
+            config.addInclude(getAddressMatcher((Element) child));
+         } else if (child.getNodeName().equals("exclude")) {
+            config.addExclude(getAddressMatcher((Element) child));
+         }
+      }
+
+
+      return config;
+   }
+
+   private FederationAddressPolicyConfiguration.Matcher getAddressMatcher(Element child) {
+      FederationAddressPolicyConfiguration.Matcher matcher = new FederationAddressPolicyConfiguration.Matcher();
+      matcher.setAddressMatch(child.getAttribute("address-match"));
+      return matcher;
+   }
+
+   private FederationPolicySet getPolicySet(Element policySetNode, final Configuration mainConfig) throws Exception {
+      FederationPolicySet config = new FederationPolicySet();
+      config.setName(policySetNode.getAttribute("name"));
+
+      NodeList children = policySetNode.getChildNodes();
+
+      List<String> policyRefs = new ArrayList<>();
+
+
+      for (int j = 0; j < children.getLength(); j++) {
+         Node child = children.item(j);
+
+         if (child.getNodeName().equals("policy")) {
+            policyRefs.add(((Element)child).getAttribute("ref"));
+         }
+      }
+      config.addPolicyRefs(policyRefs);
+
+      return config;
+   }
+
+   private FederationUpstreamConfiguration getUpstream(Element upstreamNode, final Configuration mainConfig) throws Exception {
+
+      FederationUpstreamConfiguration config = new FederationUpstreamConfiguration();
+
+      String name = upstreamNode.getAttribute("name");
+      config.setName(name);
+
+      // parsing federation password
+      String passwordTextFederation = upstreamNode.getAttribute("password");
+
+      if (passwordTextFederation != null && !passwordTextFederation.isEmpty()) {
+         String resolvedPassword = PasswordMaskingUtil.resolveMask(mainConfig.isMaskPassword(), passwordTextFederation, mainConfig.getPasswordCodec());
+         config.getConnectionConfiguration().setPassword(resolvedPassword);
+      }
+
+      config.getConnectionConfiguration().setUsername(upstreamNode.getAttribute("user"));
+
+      NamedNodeMap attributes = upstreamNode.getAttributes();
+      for (int i = 0; i < attributes.getLength(); i++) {
+         Node item = attributes.item(i);
+         if (item.getNodeName().equals("priority-adjustment")) {
+            int priorityAdjustment = Integer.parseInt(item.getNodeValue());
+            config.getConnectionConfiguration().setPriorityAdjustment(priorityAdjustment);
+         }
+      }
+
+      boolean ha = getBoolean(upstreamNode, "ha", false);
+
+      long circuitBreakerTimeout = getLong(upstreamNode, "circuit-breaker-timeout", config.getConnectionConfiguration().getCircuitBreakerTimeout(), Validators.MINUS_ONE_OR_GE_ZERO);
+
+      List<String> staticConnectorNames = new ArrayList<>();
+
+      String discoveryGroupName = null;
+
+      NodeList children = upstreamNode.getChildNodes();
+
+      List<String> policyRefs = new ArrayList<>();
+
+
+      for (int j = 0; j < children.getLength(); j++) {
+         Node child = children.item(j);
+
+         if (child.getNodeName().equals("discovery-group-ref")) {
+            discoveryGroupName = child.getAttributes().getNamedItem("discovery-group-name").getNodeValue();
+         } else if (child.getNodeName().equals("static-connectors")) {
+            getStaticConnectors(staticConnectorNames, child);
+         } else if (child.getNodeName().equals("policy")) {
+            policyRefs.add(((Element)child).getAttribute("ref"));
+         }
+      }
+      config.addPolicyRefs(policyRefs);
+
+      config.getConnectionConfiguration()
+            .setCircuitBreakerTimeout(circuitBreakerTimeout)
+            .setHA(ha);
+
+      if (!staticConnectorNames.isEmpty()) {
+         config.getConnectionConfiguration().setStaticConnectors(staticConnectorNames);
+      } else {
+         config.getConnectionConfiguration().setDiscoveryGroupName(discoveryGroupName);
+      }
+      return config;
    }
 
    private void getStaticConnectors(List<String> staticConnectorNames, Node child) {

@@ -43,7 +43,7 @@ public interface ClientSession extends XAResource, AutoCloseable {
     *
     * @see ClientSession#addressQuery(SimpleString)
     */
-   public interface AddressQuery {
+   interface AddressQuery {
 
       /**
        * Returns <code>true</code> if the binding exists, <code>false</code> else.
@@ -87,7 +87,7 @@ public interface ClientSession extends XAResource, AutoCloseable {
     *
     * @see ClientSession#queueQuery(SimpleString)
     */
-   public interface QueueQuery {
+   interface QueueQuery {
 
       /**
        * Returns <code>true</code> if the queue exists, <code>false</code> else.
@@ -158,6 +158,16 @@ public interface ClientSession extends XAResource, AutoCloseable {
       Long getDelayBeforeDispatch();
 
       Integer getDefaultConsumerWindowSize();
+
+      Boolean isGroupRebalance();
+
+      Integer getGroupBuckets();
+
+      Boolean isAutoDelete();
+
+      Long getAutoDeleteDelay();
+
+      Long getAutoDeleteMessageCount();
    }
 
    // Lifecycle operations ------------------------------------------

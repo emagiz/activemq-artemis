@@ -124,8 +124,8 @@
       </dependency>
       <dependency>
          <groupId>org.apache.activemq</groupId>
-         <artifactId>artemis-native</artifactId>
-         <version>${project.version}</version>
+         <artifactId>activemq-artemis-native</artifactId>
+         <version>${activemq-artemis-native-version}</version>
       </dependency>
       <dependency>
          <groupId>org.apache.activemq</groupId>
@@ -242,7 +242,7 @@
             <artifactId>maven-assembly-plugin</artifactId>
             <version>${maven.assembly.plugin.version}</version>
             <executions>
-               <execution>
+              <execution>
                   <id>source</id>
                   <configuration>
                      <descriptor>src/main/assembly/source-assembly.xml</descriptor>
@@ -254,7 +254,7 @@
                   </goals>
                </execution>
                <execution>
-                 <id>bin</id>
+                  <id>bin</id>
                   <configuration>
                      <descriptor>src/main/assembly/dep.xml</descriptor>
                      <tarLongFileMode>gnu</tarLongFileMode>

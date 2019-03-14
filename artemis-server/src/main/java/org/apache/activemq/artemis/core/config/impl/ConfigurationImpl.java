@@ -42,6 +42,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.apache.activemq.artemis.api.config.ActiveMQDefaultConfiguration;
 import org.apache.activemq.artemis.core.config.storage.DatabaseStorageConfiguration;
+import org.apache.activemq.artemis.core.config.FederationConfiguration;
 import org.apache.activemq.artemis.core.server.plugin.ActiveMQServerAddressPlugin;
 import org.apache.activemq.artemis.core.server.plugin.ActiveMQServerBasePlugin;
 import org.apache.activemq.artemis.core.server.plugin.ActiveMQServerBindingPlugin;
@@ -156,6 +157,8 @@ public class ConfigurationImpl implements Configuration, Serializable {
 
    protected List<ClusterConnectionConfiguration> clusterConfigurations = new ArrayList<>();
 
+   protected List<FederationConfiguration> federationConfigurations = new ArrayList<>();
+
    private List<CoreQueueConfiguration> queueConfigurations = new ArrayList<>();
 
    private List<CoreAddressConfiguration> addressConfigurations = new ArrayList<>();
@@ -179,6 +182,8 @@ public class ConfigurationImpl implements Configuration, Serializable {
    protected boolean createBindingsDir = ActiveMQDefaultConfiguration.isDefaultCreateBindingsDir();
 
    protected String journalDirectory = ActiveMQDefaultConfiguration.getDefaultJournalDir();
+
+   protected String nodeManagerLockDirectory = null;
 
    protected boolean createJournalDir = ActiveMQDefaultConfiguration.isDefaultCreateJournalDir();
 
@@ -812,6 +817,21 @@ public class ConfigurationImpl implements Configuration, Serializable {
    @Override
    public ConfigurationImpl setJournalDirectory(final String dir) {
       journalDirectory = dir;
+      return this;
+   }
+
+   @Override
+   public File getNodeManagerLockLocation() {
+      if (nodeManagerLockDirectory == null) {
+         return getJournalLocation();
+      } else {
+         return subFolder(nodeManagerLockDirectory);
+      }
+   }
+
+   @Override
+   public Configuration setNodeManagerLockDirectory(String dir) {
+      nodeManagerLockDirectory = dir;
       return this;
    }
 
@@ -1518,6 +1538,11 @@ public class ConfigurationImpl implements Configuration, Serializable {
    @Override
    public List<ActiveMQServerCriticalPlugin> getBrokerCriticalPlugins() {
       return brokerCriticalPlugins;
+   }
+
+   @Override
+   public List<FederationConfiguration> getFederationConfigurations() {
+      return federationConfigurations;
    }
 
    @Override

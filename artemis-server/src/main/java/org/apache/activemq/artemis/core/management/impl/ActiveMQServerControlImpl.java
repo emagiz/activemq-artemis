@@ -30,6 +30,7 @@ import javax.management.NotificationEmitter;
 import javax.management.NotificationFilter;
 import javax.management.NotificationListener;
 import javax.transaction.xa.Xid;
+import java.net.URL;
 import java.text.DateFormat;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -58,6 +59,7 @@ import org.apache.activemq.artemis.api.core.management.AddressControl;
 import org.apache.activemq.artemis.api.core.management.BridgeControl;
 import org.apache.activemq.artemis.api.core.management.CoreNotificationType;
 import org.apache.activemq.artemis.api.core.management.DivertControl;
+import org.apache.activemq.artemis.api.core.management.ManagementHelper;
 import org.apache.activemq.artemis.api.core.management.Parameter;
 import org.apache.activemq.artemis.api.core.management.QueueControl;
 import org.apache.activemq.artemis.core.client.impl.Topology;
@@ -118,8 +120,10 @@ import org.apache.activemq.artemis.core.transaction.TransactionDetailFactory;
 import org.apache.activemq.artemis.core.transaction.impl.CoreTransactionDetail;
 import org.apache.activemq.artemis.core.transaction.impl.XidImpl;
 import org.apache.activemq.artemis.spi.core.protocol.RemotingConnection;
+import org.apache.activemq.artemis.spi.core.security.jaas.PropertiesLoginModuleConfigurator;
 import org.apache.activemq.artemis.utils.JsonLoader;
 import org.apache.activemq.artemis.utils.ListUtil;
+import org.apache.activemq.artemis.utils.PasswordMaskingUtil;
 import org.apache.activemq.artemis.utils.SecurityFormatter;
 import org.apache.activemq.artemis.utils.collections.TypedProperties;
 import org.jboss.logging.Logger;
@@ -824,11 +828,17 @@ public class ActiveMQServerControlImpl extends AbstractControl implements Active
               maxConsumers,
               purgeOnNoConsumers,
               addressSettings.isDefaultExclusiveQueue(),
+              addressSettings.isDefaultGroupRebalance(),
+              addressSettings.getDefaultGroupBuckets(),
               addressSettings.isDefaultLastValueQueue(),
               addressSettings.getDefaultLastValueKey() == null ? null : addressSettings.getDefaultLastValueKey().toString(),
               addressSettings.isDefaultNonDestructive(),
               addressSettings.getDefaultConsumersBeforeDispatch(),
-              addressSettings.getDefaultDelayBeforeDispatch(), autoCreateAddress
+              addressSettings.getDefaultDelayBeforeDispatch(),
+              addressSettings.isAutoDeleteQueues(),
+              addressSettings.getAutoDeleteQueuesDelay(),
+              addressSettings.getAutoDeleteQueuesMessageCount(),
+              autoCreateAddress
       );
    }
 
@@ -841,11 +851,16 @@ public class ActiveMQServerControlImpl extends AbstractControl implements Active
                              int maxConsumers,
                              boolean purgeOnNoConsumers,
                              boolean exclusive,
+                             boolean groupRebalance,
+                             int groupBuckets,
                              boolean lastValue,
                              String lastValueKey,
                              boolean nonDestructive,
                              int consumersBeforeDispatch,
                              long delayBeforeDispatch,
+                             boolean autoDelete,
+                             long autoDeleteDelay,
+                             long autoDeleteMessageCount,
                              boolean autoCreateAddress) throws Exception {
       checkStarted();
 
@@ -857,7 +872,7 @@ public class ActiveMQServerControlImpl extends AbstractControl implements Active
             filter = new SimpleString(filterStr);
          }
 
-         final Queue queue = server.createQueue(SimpleString.toSimpleString(address), RoutingType.valueOf(routingType.toUpperCase()), SimpleString.toSimpleString(name), filter, durable, false, maxConsumers, purgeOnNoConsumers, exclusive, lastValue, SimpleString.toSimpleString(lastValueKey), nonDestructive, consumersBeforeDispatch, delayBeforeDispatch, autoCreateAddress);
+         final Queue queue = server.createQueue(SimpleString.toSimpleString(address), RoutingType.valueOf(routingType.toUpperCase()), SimpleString.toSimpleString(name), filter, durable, false, maxConsumers, purgeOnNoConsumers, exclusive, groupRebalance, groupBuckets, lastValue, SimpleString.toSimpleString(lastValueKey), nonDestructive, consumersBeforeDispatch, delayBeforeDispatch, autoDelete, autoDeleteDelay, autoDeleteMessageCount, autoCreateAddress);
          return QueueTextFormatter.Long.format(queue, new StringBuilder()).toString();
       } catch (ActiveMQException e) {
          throw new IllegalStateException(e.getMessage());
@@ -892,7 +907,7 @@ public class ActiveMQServerControlImpl extends AbstractControl implements Active
                              Boolean purgeOnNoConsumers,
                              Boolean exclusive,
                              String user) throws Exception {
-      return updateQueue(name, routingType, null, maxConsumers, purgeOnNoConsumers, exclusive, null, null, null, user);
+      return updateQueue(name, routingType, null, maxConsumers, purgeOnNoConsumers, exclusive, null, null, null, null, null, user);
    }
 
    @Override
@@ -902,6 +917,8 @@ public class ActiveMQServerControlImpl extends AbstractControl implements Active
                              Integer maxConsumers,
                              Boolean purgeOnNoConsumers,
                              Boolean exclusive,
+                             Boolean groupRebalance,
+                             Integer groupBuckets,
                              Boolean nonDestructive,
                              Integer consumersBeforeDispatch,
                              Long delayBeforeDispatch,
@@ -911,7 +928,7 @@ public class ActiveMQServerControlImpl extends AbstractControl implements Active
       clearIO();
 
       try {
-         final Queue queue = server.updateQueue(name, routingType != null ? RoutingType.valueOf(routingType) : null, filter, maxConsumers, purgeOnNoConsumers, exclusive, nonDestructive, consumersBeforeDispatch, delayBeforeDispatch, user);
+         final Queue queue = server.updateQueue(name, routingType != null ? RoutingType.valueOf(routingType) : null, filter, maxConsumers, purgeOnNoConsumers, exclusive, groupRebalance, groupBuckets, nonDestructive, consumersBeforeDispatch, delayBeforeDispatch, user);
          if (queue == null) {
             throw ActiveMQMessageBundle.BUNDLE.noSuchQueue(new SimpleString(name));
          }
@@ -2951,10 +2968,85 @@ public class ActiveMQServerControlImpl extends AbstractControl implements Active
       if (!(notification.getType() instanceof CoreNotificationType))
          return;
       CoreNotificationType type = (CoreNotificationType) notification.getType();
-      TypedProperties prop = notification.getProperties();
+      if (type == CoreNotificationType.SESSION_CREATED) {
+         TypedProperties props = notification.getProperties();
+         /*
+          * If the SESSION_CREATED notification is received from another node in the cluster, no broadcast call is made.
+          * To keep the original logic to avoid calling the broadcast multiple times for the same SESSION_CREATED notification in the cluster.
+          */
+         if (props.getIntProperty(ManagementHelper.HDR_DISTANCE) > 0) {
+            return;
+         }
+      }
 
       this.broadcaster.sendNotification(new Notification(type.toString(), this, notifSeq.incrementAndGet(), notification.toString()));
    }
 
+   @Override
+   public void addUser(String username, String password, String roles, boolean plaintext) throws Exception {
+
+      tcclInvoke(ActiveMQServerControlImpl.class.getClassLoader(), () -> internalAddUser(username, password, roles, plaintext));
+   }
+
+   private void internalAddUser(String username, String password, String roles, boolean plaintext) throws Exception {
+      PropertiesLoginModuleConfigurator config = getPropertiesLoginModuleConfigurator();
+      config.addNewUser(username, plaintext ? password : PasswordMaskingUtil.getHashProcessor().hash(password), roles.split(","));
+      config.save();
+
+   }
+
+   private String getSecurityDomain() {
+      return server.getSecurityManager().getDomain();
+   }
+
+   @Override
+   public String listUser(String username) throws Exception {
+      return (String)tcclCall(ActiveMQServerControlImpl.class.getClassLoader(), () -> internaListUser(username));
+   }
+   private String internaListUser(String username) throws Exception {
+      PropertiesLoginModuleConfigurator config = getPropertiesLoginModuleConfigurator();
+      Map<String, Set<String>> info = config.listUser(username);
+      JsonArrayBuilder users = JsonLoader.createArrayBuilder();
+      for (Entry<String, Set<String>> entry : info.entrySet()) {
+         JsonObjectBuilder user = JsonLoader.createObjectBuilder();
+         user.add("username", entry.getKey());
+         JsonArrayBuilder roles = JsonLoader.createArrayBuilder();
+         for (String role : entry.getValue()) {
+            roles.add(role);
+         }
+         user.add("roles", roles);
+         users.add(user);
+      }
+      return users.build().toString();
+   }
+
+   @Override
+   public void removeUser(String username) throws Exception {
+      tcclInvoke(ActiveMQServerControlImpl.class.getClassLoader(), () -> internalRemoveUser(username));
+   }
+   private void internalRemoveUser(String username) throws Exception {
+      PropertiesLoginModuleConfigurator config = getPropertiesLoginModuleConfigurator();
+      config.removeUser(username);
+      config.save();
+   }
+
+   @Override
+   public void resetUser(String username, String password, String roles) throws Exception {
+      tcclInvoke(ActiveMQServerControlImpl.class.getClassLoader(), () -> internalresetUser(username, password, roles));
+   }
+   private void internalresetUser(String username, String password, String roles) throws Exception {
+      PropertiesLoginModuleConfigurator config = getPropertiesLoginModuleConfigurator();
+      config.updateUser(username, password, roles == null ? null : roles.split(","));
+      config.save();
+   }
+
+   private PropertiesLoginModuleConfigurator getPropertiesLoginModuleConfigurator() throws Exception {
+      URL configurationUrl = server.getConfiguration().getConfigurationUrl();
+      if (configurationUrl == null) {
+         throw ActiveMQMessageBundle.BUNDLE.failedToLocateConfigURL();
+      }
+      String path = configurationUrl.getPath();
+      return new PropertiesLoginModuleConfigurator(getSecurityDomain(), path.substring(0, path.lastIndexOf("/")));
+   }
 }
 

@@ -598,11 +598,16 @@ public interface ActiveMQServerControl {
                       @Parameter(name = "maxConsumers", desc = "The maximum number of consumers allowed on this queue at any one time") int maxConsumers,
                       @Parameter(name = "purgeOnNoConsumers", desc = "Delete this queue when the last consumer disconnects") boolean purgeOnNoConsumers,
                       @Parameter(name = "exclusive", desc = "If the queue should route exclusively to one consumer") boolean exclusive,
+                      @Parameter(name = "groupRebalance", desc = "If the queue should rebalance groups when a consumer is added") boolean groupRebalance,
+                      @Parameter(name = "groupBuckets", desc = "Number of buckets that should be used for message groups, -1 (default) is unlimited, and groups by raw key instead") int groupBuckets,
                       @Parameter(name = "lastValue", desc = "Use last-value semantics") boolean lastValue,
                       @Parameter(name = "lastValueKey", desc = "Use the specified property key for the last value") String lastValueKey,
                       @Parameter(name = "nonDestructive", desc = "If the queue is non-destructive") boolean nonDestructive,
                       @Parameter(name = "consumersBeforeDispatch", desc = "Number of consumers needed before dispatch can start") int consumersBeforeDispatch,
                       @Parameter(name = "delayBeforeDispatch", desc = "Delay to wait before dispatching if number of consumers before dispatch is not met") long delayBeforeDispatch,
+                      @Parameter(name = "autoDelete", desc = "If the queue should be deleted once no consumers") boolean autoDelete,
+                      @Parameter(name = "autoDeleteDelay", desc = "How long to wait (in milliseconds) before deleting auto-created queues after the queue has 0 consumers") long autoDeleteDelay,
+                      @Parameter(name = "autoDeleteMessageCount", desc = "The message count the queue must be at or below before it can be evaluated to be auto deleted, 0 waits until empty queue (default) and -1 disables this check") long autoDeleteMessageCount,
                       @Parameter(name = "autoCreateAddress", desc = "Create an address with default values should a matching address not be found") boolean autoCreateAddress) throws Exception;
 
    /**
@@ -712,6 +717,8 @@ public interface ActiveMQServerControl {
                       @Parameter(name = "maxConsumers", desc = "The maximum number of consumers allowed on this queue at any one time") Integer maxConsumers,
                       @Parameter(name = "purgeOnNoConsumers", desc = "Delete this queue when the last consumer disconnects") Boolean purgeOnNoConsumers,
                       @Parameter(name = "exclusive", desc = "If the queue should route exclusively to one consumer") Boolean exclusive,
+                      @Parameter(name = "groupRebalance", desc = "If the queue should rebalance groups when a consumer is added") Boolean groupRebalance,
+                      @Parameter(name = "groupBuckets", desc = "Number of buckets that should be used for message groups, -1 (default) is unlimited, and groups by raw key instead") Integer groupBuckets,
                       @Parameter(name = "nonDestructive", desc = "If the queue is non-destructive") Boolean nonDestructive,
                       @Parameter(name = "consumersBeforeDispatch", desc = "Number of consumers needed before dispatch can start") Integer consumersBeforeDispatch,
                       @Parameter(name = "delayBeforeDispatch", desc = "Delay to wait before dispatching if number of consumers before dispatch is not met") Long delayBeforeDispatch,
@@ -1341,5 +1348,50 @@ public interface ActiveMQServerControl {
     */
    @Operation(desc = "Names of the cluster-connections deployed on this server", impact = MBeanOperationInfo.INFO)
    String[] getClusterConnectionNames();
+
+   /**
+    * Add a user (only applicable when using the JAAS PropertiesLoginModule)
+    *
+    * @param username
+    * @param password
+    * @param roles
+    * @throws Exception
+    */
+   @Operation(desc = "add a user (only applicable when using the JAAS PropertiesLoginModule)", impact = MBeanOperationInfo.ACTION)
+   void addUser(@Parameter(name = "username", desc = "Name of the user") String username,
+                @Parameter(name = "password", desc = "User's password") String password,
+                @Parameter(name = "roles", desc = "User's role (comma separated)") String roles,
+                @Parameter(name = "plaintext", desc = "whether or not to store the password in plaintext or hash it") boolean plaintext) throws Exception;
+
+   /**
+    * List the information about a user or all users if no username is supplied (only applicable when using the JAAS PropertiesLoginModule).
+    *
+    * @param username
+    * @return JSON array of user & role information
+    * @throws Exception
+    */
+   @Operation(desc = "list info about a user or all users if no username is supplied (only applicable when using the JAAS PropertiesLoginModule)", impact = MBeanOperationInfo.ACTION)
+   String listUser(@Parameter(name = "username", desc = "Name of the user; leave null to list all known users") String username) throws Exception;
+
+   /**
+    * Remove a user (only applicable when using the JAAS PropertiesLoginModule).
+    *
+    * @param username
+    * @throws Exception
+    */
+   @Operation(desc = "remove a user (only applicable when using the JAAS PropertiesLoginModule)", impact = MBeanOperationInfo.ACTION)
+   void removeUser(@Parameter(name = "username", desc = "Name of the user") String username) throws Exception;
+   /**
+    * Set new properties on an existing user (only applicable when using the JAAS PropertiesLoginModule).
+    *
+    * @param username
+    * @param password
+    * @param roles
+    * @throws Exception
+    */
+   @Operation(desc = "set new properties on an existing user (only applicable when using the JAAS PropertiesLoginModule)", impact = MBeanOperationInfo.ACTION)
+   void resetUser(@Parameter(name = "username", desc = "Name of the user") String username,
+                  @Parameter(name = "password", desc = "User's password") String password,
+                  @Parameter(name = "roles", desc = "User's role (comma separated)") String roles) throws Exception;
 }
 

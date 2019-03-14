@@ -30,17 +30,31 @@ import org.apache.activemq.artemis.core.io.AbstractSequentialFileFactory;
 import org.apache.activemq.artemis.core.io.IOCallback;
 import org.apache.activemq.artemis.core.io.IOCriticalErrorListener;
 import org.apache.activemq.artemis.core.io.SequentialFile;
-import org.apache.activemq.artemis.jlibaio.LibaioContext;
-import org.apache.activemq.artemis.jlibaio.LibaioFile;
-import org.apache.activemq.artemis.jlibaio.SubmitInfo;
-import org.apache.activemq.artemis.jlibaio.util.CallbackCache;
+import org.apache.activemq.artemis.nativo.jlibaio.LibaioContext;
+import org.apache.activemq.artemis.nativo.jlibaio.LibaioFile;
+import org.apache.activemq.artemis.nativo.jlibaio.SubmitInfo;
+import org.apache.activemq.artemis.nativo.jlibaio.util.CallbackCache;
 import org.apache.activemq.artemis.journal.ActiveMQJournalLogger;
+import org.apache.activemq.artemis.utils.PowerOf2Util;
 import org.apache.activemq.artemis.utils.critical.CriticalAnalyzer;
 import org.jboss.logging.Logger;
 
 public final class AIOSequentialFileFactory extends AbstractSequentialFileFactory {
 
    private static final Logger logger = Logger.getLogger(AIOSequentialFileFactory.class);
+
+   // This is useful in cases where you want to disable loading the native library. (e.g. testsuite)
+   private static final boolean DISABLED = System.getProperty(AIOSequentialFileFactory.class.getName() + ".DISABLED") != null;
+
+   static {
+      // This is usually only used on testsuite.
+      // In case it's used, I would rather have it on the loggers so we know what's happening
+      if (DISABLED) {
+
+         // This is only used in tests, hence I'm not creating a Logger for this
+         logger.info(AIOSequentialFileFactory.class.getName() + ".DISABLED = true");
+      }
+   }
 
    private final ReuseBuffersController buffersControl = new ReuseBuffersController();
 
@@ -114,7 +128,7 @@ public final class AIOSequentialFileFactory extends AbstractSequentialFileFactor
    }
 
    public static boolean isSupported() {
-      return LibaioContext.isLoaded();
+      return !DISABLED && LibaioContext.isLoaded();
    }
 
    public static boolean isSupported(File journalPath) {
@@ -150,13 +164,10 @@ public final class AIOSequentialFileFactory extends AbstractSequentialFileFactor
    @Override
    public ByteBuffer allocateDirectBuffer(final int size) {
 
-      int blocks = size / getAlignment();
-      if (size % getAlignment() != 0) {
-         blocks++;
-      }
+      final int alignedSize = calculateBlockSize(size);
 
       // The buffer on AIO has to be a multiple of getAlignment()
-      ByteBuffer buffer = LibaioContext.newAlignedBuffer(blocks * getAlignment(), getAlignment());
+      ByteBuffer buffer = LibaioContext.newAlignedBuffer(alignedSize, getAlignment());
 
       buffer.limit(size);
 
@@ -170,11 +181,8 @@ public final class AIOSequentialFileFactory extends AbstractSequentialFileFactor
 
    @Override
    public ByteBuffer newBuffer(int size) {
-      if (size % getAlignment() != 0) {
-         size = (size / getAlignment() + 1) * getAlignment();
-      }
-
-      return buffersControl.newBuffer(size);
+      final int alignedSize = calculateBlockSize(size);
+      return buffersControl.newBuffer(alignedSize, true);
    }
 
    @Override
@@ -186,22 +194,26 @@ public final class AIOSequentialFileFactory extends AbstractSequentialFileFactor
    @Override
    public int getAlignment() {
       if (alignment < 0) {
+         alignment = calculateAlignment(journalDir);
+      }
+      return alignment;
+   }
 
-         File checkFile = null;
-
-         try {
-            journalDir.mkdirs();
-            checkFile = File.createTempFile("journalCheck", ".tmp", journalDir);
-            checkFile.mkdirs();
-            checkFile.createNewFile();
-            alignment = LibaioContext.getBlockSize(checkFile);
-         } catch (Throwable e) {
-            logger.warn(e.getMessage(), e);
-            alignment = 512;
-         } finally {
-            if (checkFile != null) {
-               checkFile.delete();
-            }
+   private static int calculateAlignment(File journalDir) {
+      File checkFile = null;
+      int alignment;
+      try {
+         journalDir.mkdirs();
+         checkFile = File.createTempFile("journalCheck", ".tmp", journalDir);
+         checkFile.mkdirs();
+         checkFile.createNewFile();
+         alignment = LibaioContext.getBlockSize(checkFile);
+      } catch (Throwable e) {
+         logger.warn(e.getMessage(), e);
+         alignment = 512;
+      } finally {
+         if (checkFile != null) {
+            checkFile.delete();
          }
       }
       return alignment;
@@ -217,11 +229,19 @@ public final class AIOSequentialFileFactory extends AbstractSequentialFileFactor
 
    @Override
    public int calculateBlockSize(final int position) {
-      int alignment = getAlignment();
+      final int alignment = getAlignment();
+      if (!PowerOf2Util.isPowOf2(alignment)) {
+         return align(position, alignment);
+      } else {
+         return PowerOf2Util.align(position, alignment);
+      }
+   }
 
-      int pos = (position / alignment + (position % alignment != 0 ? 1 : 0)) * alignment;
-
-      return pos;
+   /**
+    * It can be used to align {@code size} if alignment is not a power of 2: otherwise better to use {@link PowerOf2Util#align(int, int)} instead.
+    */
+   private static int align(int size, int alignment) {
+      return (size / alignment + (size % alignment != 0 ? 1 : 0)) * alignment;
    }
 
    /* (non-Javadoc)
@@ -429,7 +449,7 @@ public final class AIOSequentialFileFactory extends AbstractSequentialFileFactor
          return alignedBufferSize;
       }
 
-      public ByteBuffer newBuffer(final int size) {
+      public ByteBuffer newBuffer(final int size, final boolean zeroed) {
          // if a new buffer wasn't requested in 10 seconds, we clear the queue
          // This is being done this way as we don't need another Timeout Thread
          // just to cleanup this
@@ -468,7 +488,11 @@ public final class AIOSequentialFileFactory extends AbstractSequentialFileFactor
 
                buffer.limit(calculateBlockSize(size));
             } else {
-               clearBuffer(buffer);
+               if (zeroed) {
+                  clearBuffer(buffer);
+               } else {
+                  buffer.position(0);
+               }
 
                // set the limit of the buffer to the bufferSize being required
                buffer.limit(calculateBlockSize(size));
