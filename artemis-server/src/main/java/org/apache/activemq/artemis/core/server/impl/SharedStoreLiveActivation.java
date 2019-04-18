@@ -16,6 +16,7 @@
  */
 package org.apache.activemq.artemis.core.server.impl;
 
+import org.apache.activemq.artemis.core.server.ActivateCallback;
 import org.apache.activemq.artemis.core.server.ActiveMQServerLogger;
 import org.apache.activemq.artemis.core.server.NodeManager;
 import org.apache.activemq.artemis.core.server.cluster.ha.SharedStoreMasterPolicy;
@@ -32,6 +33,8 @@ public final class SharedStoreLiveActivation extends LiveActivation {
    private ActiveMQServerImpl activeMQServer;
 
    private volatile FileLockNodeManager.LockListener activeLockListener;
+
+   private volatile ActivateCallback nodeManagerActivateCallback;
 
    public SharedStoreLiveActivation(ActiveMQServerImpl server, SharedStoreMasterPolicy sharedStoreMasterPolicy) {
       this.activeMQServer = server;
@@ -68,7 +71,8 @@ public final class SharedStoreLiveActivation extends LiveActivation {
             activeMQServer.getBackupManager().announceBackup();
          }
 
-         activeMQServer.registerActivateCallback(activeMQServer.getNodeManager().startLiveNode());
+         nodeManagerActivateCallback = activeMQServer.getNodeManager().startLiveNode();
+         activeMQServer.registerActivateCallback(nodeManagerActivateCallback);
          addLockListener(activeMQServer, activeMQServer.getNodeManager());
 
          if (activeMQServer.getState() == ActiveMQServerImpl.SERVER_STATE.STOPPED || activeMQServer.getState() == ActiveMQServerImpl.SERVER_STATE.STOPPING) {
@@ -94,23 +98,46 @@ public final class SharedStoreLiveActivation extends LiveActivation {
 
 			@Override
 			public void lostLock() {
-				try {
-					activeMQServer.stop(true, false);
-				} catch (Exception e) {
-					logger.warn(e.getMessage());
-				}
-				
-				try {
-					activeMQServer.start();
-				} catch (Exception e) {
-					logger.error(e.getMessage());
-				}
+				stopStartServerInSeperateThread(activeMQServer);
 			}
 			   
 		   };
 		   fileNodeManager.registerLockListener(activeLockListener);
 	   } // else no business registering a listener
    }
+   
+	/**
+	 * We need to do this in a new thread because this takes to long to finish in the scheduled thread
+	 * Also this is not the responsibility of the scheduled thread
+	 * @param activeMQServer
+	 */
+	private void stopStartServerInSeperateThread(ActiveMQServerImpl activeMQServer) {
+		try {
+
+			Runnable startServerRunnable = new Runnable() {
+
+				@Override
+				public void run() {
+					try {
+						activeMQServer.stop(true, false);
+					} catch (Exception e) {
+						logger.warn("Failed to stop artemis server after loosing the lock", e);
+					}
+					
+					try {
+						activeMQServer.start();
+					} catch (Exception e) {
+						logger.error("Failed to start artemis server after recovering from loosing the lock", e);
+					}
+				}
+				
+			};
+			Thread startServer = new Thread(startServerRunnable);
+			startServer.start();
+		} catch (Exception e) {
+			logger.error(e.getMessage());
+		}
+	}
 
    @Override
    public void close(boolean permanently, boolean restarting) throws Exception {
@@ -121,6 +148,10 @@ public final class SharedStoreLiveActivation extends LiveActivation {
     	 LockListener closeLockListener = activeLockListener;
     	 if (closeLockListener != null)	{
     		 closeLockListener.unregisterListener();
+    	 }
+    	 ActivateCallback activateCallback = nodeManagerActivateCallback;
+    	 if (activateCallback != null)	{
+    		 activeMQServer.unregisterActivateCallback(activateCallback);
     	 }
          if (sharedStoreMasterPolicy.isFailoverOnServerShutdown() || permanently) {
             nodeManagerInUse.crashLiveServer();
